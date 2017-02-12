@@ -17,11 +17,76 @@ public class SplinterLogTest {
                     .withComponentOverride("WaterReservoir")
                     .withUserData("size", "large")
                     .withInstrumentationOverride(0, null)
-                    .build());
+                    .toString());
         } finally {
             SLog.setEnabled(true);
         }
     }
+
+    @Test
+    public void testStaticUtilsVarArgs() {
+        String expected = "$SPG$+T=Coffee Time;+O=selectCupSize;+M=S;";
+        Assert.assertEquals(expected, SLogCall.log("Coffee Time", "selectCupSize", null));
+
+        expected = "$SPG$+T=Coffee Time;+O=selectCupSize;+M=S;_MISSING_KEY_0=null;";
+        Assert.assertEquals(expected, SLogCall.log("Coffee Time", "selectCupSize", null, null));
+
+        expected = "$SPG$+T=Coffee Time;+O=selectCupSize;+M=S;";
+        Assert.assertEquals(expected, SLogCall.log("Coffee Time", "selectCupSize", "size"));
+
+        expected = "$SPG$+T=Coffee Time;+O=selectCupSize;+M=S;size=null;";
+        Assert.assertEquals(expected, SLogCall.log("Coffee Time", "selectCupSize", "size", null));
+
+        expected = "$SPG$+T=Coffee Time;+O=selectCupSize;+M=S;_MISSING_KEY_0=large;";
+        Assert.assertEquals(expected, SLogCall.log("Coffee Time", "selectCupSize", null, "large"));
+
+        expected = "$SPG$+T=Coffee Time;+O=selectCupSize;+M=S;_MISSING_KEY_0=large;";
+        Assert.assertEquals(expected, SLogCall.log("Coffee Time", "selectCupSize", null, "large", "newkey"));
+
+        expected = "$SPG$+T=Coffee Time;+O=selectCupSize;+M=S;size=large;";
+        Assert.assertEquals(expected, SLogCall.log("Coffee Time", "selectCupSize", "size", "large"));
+
+    }
+
+    @Test
+    public void testStaticUtils() {
+        String expected = "$SPG$+T=Coffee Time;+O=selectCupSize;+M=S;size=large;";
+        Assert.assertEquals(expected, SLogCall.log("Coffee Time", "selectCupSize", "size", "large"));
+
+        expected = "$SPG$+T=Coffee Time;+O=selectCupSize;+M=S;";
+        Assert.assertEquals(expected, SLogCall.log("Coffee Time", "selectCupSize"));
+
+        expected = "$SPG$+T=Coffee Time;+O=selectCupSize;+M=A;size=large;";
+        Assert.assertEquals(expected, SLogStart.log("Coffee Time", "selectCupSize", "size", "large"));
+
+        expected = "$SPG$+T=Coffee Time;+O=selectCupSize;+M=A;";
+        Assert.assertEquals(expected, SLogStart.log("Coffee Time", "selectCupSize"));
+
+        expected = "$SPG$+T=Coffee Time;+O=selectCupSize;+M=F;size=large;";
+        Assert.assertEquals(expected, SLogStop.log("Coffee Time", "selectCupSize", "size", "large"));
+
+        expected = "$SPG$+T=Coffee Time;+O=selectCupSize;+M=F;";
+        Assert.assertEquals(expected, SLogStop.log("Coffee Time", "selectCupSize"));
+
+        expected = "$SPG$+T=Coffee Time;+O=selectCupSize;+M=S;+MC=1;size=large;";
+        Assert.assertEquals(expected, SLogBroadcastSend.log("Coffee Time", "selectCupSize", "size", "large"));
+
+        expected = "$SPG$+T=Coffee Time;+O=selectCupSize;+M=S;+MC=1;";
+        Assert.assertEquals(expected, SLogBroadcastSend.log("Coffee Time", "selectCupSize"));
+
+        expected = "$SPG$+T=Coffee Time;+O=bcastId;+M=A;+OA=selectCupSize;size=large;";
+        Assert.assertEquals(expected, SLogBroadcastStart.log("Coffee Time", "bcastId", "selectCupSize","size", "large"));
+
+        expected = "$SPG$+T=Coffee Time;+O=bcastId;+M=A;+OA=selectCupSize;";
+        Assert.assertEquals(expected, SLogBroadcastStart.log("Coffee Time", "bcastId", "selectCupSize"));
+
+        expected = "$SPG$+T=Coffee Time;+O=bcastId;+M=F;+OA=selectCupSize;size=large;";
+        Assert.assertEquals(expected, SLogBroadcastStop.log("Coffee Time", "bcastId", "selectCupSize","size", "large"));
+
+        expected = "$SPG$+T=Coffee Time;+O=bcastId;+M=F;+OA=selectCupSize;";
+        Assert.assertEquals(expected, SLogBroadcastStop.log("Coffee Time", "bcastId", "selectCupSize"));
+    }
+
     @Test
     public void testSunnyDay() {
         String expected = "$SPG$+T=Coffee Time;+O=selectCupSize;+M=S;size=large;";
@@ -31,7 +96,16 @@ public class SplinterLogTest {
         Map<String, String> userData = new HashMap<String, String>();
         userData.put("size", "large");
         Assert.assertEquals(expected, new SLogCall("Coffee Time", "selectCupSize")
-                .withUserData(userData).build());
+                .withUserData(userData).toString());
+        
+        expected = "$SPG$+T=Coffee Time;+O=selectCupSize;+M=S;size=large;size1=large;size2=large;size3=large;size4=large;size5=large;";
+        Assert.assertEquals(expected, new SLogCall("Coffee Time", "selectCupSize")
+                .withUserData("size", "large")
+                .withUserData("size1", "large")
+                .withUserData("size2", "large")
+                .withUserData("size3", "large")
+                .withUserData("size4", "large")
+                .withUserData("size5", "large").toString());
     }
 
     @Test
@@ -39,20 +113,20 @@ public class SplinterLogTest {
         String expected = "$SPG$+T=Coffee Time;+O=pumpWater;+M=A;+I^=100ms;";
         Assert.assertEquals(expected, new SLogStart("Coffee Time", "pumpWater")
                 .withInstrumentationOverride(100, SLog.TimeNotation.MILLIS)
-                .build());
+                .toString());
 
         expected = "$SPG$+T=Coffee Time;+O=coffeeComplete;+M=F;+OA=ensureCapacity;+C^=WaterReservoir;";
         Assert.assertEquals(expected, new SLogStop("Coffee Time", "coffeeComplete")
                 .withOperationAlias("ensureCapacity")
                 .withComponentOverride("WaterReservoir")
-                .build());
+                .toString());
     }
 
     @Test
     public void testMissingParams() {
         String expected = "$SPG$+T=_MISSING_TASK_;+O=_MISSING_OPERATION_;+M=S;";
         Assert.assertEquals(expected, new SLog(null, null, null)
-                .build());
+                .toString());
 
         expected = "$SPG$+T=Coffee Time;+O=selectCupSize;+M=S;_MISSING_KEY_0=large;";
         Assert.assertEquals(expected, new SLogCall("Coffee Time", "selectCupSize")
@@ -78,7 +152,7 @@ public class SplinterLogTest {
                 .withOperation("\\open")
                 .withOperationAlias("=1")
                 .withTask("file; opened")
-                .build());
+                .toString());
 
     }
 }

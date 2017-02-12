@@ -1,7 +1,5 @@
 package com.splinter.graphing;
 
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Map;
 
 /**
@@ -166,16 +164,54 @@ public class SLog {
         F  /* FINISH      */
     }
 
-    private static boolean isEnabled = true;
+    protected static boolean isEnabled = true;
 
     private String mTask;
     private String mOperation;
     private String mOperationAlias;
     private String mComponentOverride;
     private String mInstrumentationOverride;
-    private List<String> mUserData;
+    private ArrayBackedList<String> mUserData;
     private MessageType mMessageType;
     private boolean mMulticast;
+
+    private static class ArrayBackedList<T> {
+        private Object[] array;
+        private int size;
+
+        public ArrayBackedList(int capacity) {
+            array = new Object[capacity];
+        }
+
+        public ArrayBackedList(Object[] backingArray, int size) {
+            this.array = backingArray;
+            this.size = size;
+        }
+
+        public void add(T t) {
+            if(size == array.length) {
+                Object[] newarray = new Object[array.length * 2];
+                System.arraycopy(array, 0, newarray, 0, array.length);
+                array = newarray;
+            }
+
+            array[size++] = t;
+        }
+
+        public T get(int i) {
+            if(i >= 0 && i < size)
+                return (T) array[i];
+            throw new ArrayIndexOutOfBoundsException("Index out of bounds: " + i);
+        }
+
+        public Object[] backingArray() {
+            return  array;
+        }
+
+        public int size() {
+            return size;
+        }
+    }
 
     /**
      * Globally enable or disable the log creation.
@@ -188,11 +224,11 @@ public class SLog {
     /**
      * Create a new Splinter Log with a task, operation and message type.
      *
-     * @param task the task name {@link #withTask(String)}
-     * @param operation the operation {@link #withOperation(String)}
+     * @param task the task name {@link #withTask(Object)}
+     * @param operation the operation {@link #withOperation(Object)}
      * @param msgType the message type {@link MessageType}
      */
-    public SLog(String task, String operation, MessageType msgType) {
+    public SLog(Object task, Object operation, MessageType msgType) {
         this.mTask = escape(task);
         this.mOperation = escape(operation);
         this.mMessageType = msgType == null ? MessageType.S : msgType;
@@ -221,7 +257,7 @@ public class SLog {
      * @param value the operation alias
      * @return this object
      */
-    public final SLog withOperationAlias(String value) {
+    public final SLog withOperationAlias(Object value) {
         if(!isEnabled) return this;
 
         mOperationAlias = escape(value);
@@ -236,7 +272,7 @@ public class SLog {
      * @param value the operation.
      * @return this object
      */
-    public final SLog withOperation(String value) {
+    public final SLog withOperation(Object value) {
         if(!isEnabled) return this;
 
         this.mOperation = escape(value);
@@ -250,7 +286,7 @@ public class SLog {
      * @param value the new task name.
      * @return this object
      */
-    public SLog withTask(String value) {
+    public SLog withTask(Object value) {
         if(!isEnabled) return this;
 
         this.mTask = escape(value);
@@ -262,10 +298,22 @@ public class SLog {
      * @param value the component override.
      * @return this object
      */
-    public final SLog withComponentOverride(String value) {
+    public final SLog withComponentOverride(Object value) {
         if(!isEnabled) return this;
 
         this.mComponentOverride = escape(value);
+        return this;
+    }
+
+    /**
+     * Add a component override. See the description of this class for more on this.
+     * @param clazz the component override.
+     * @return this object
+     */
+    public final SLog withComponentOverride(Class<?> clazz) {
+        if(!isEnabled) return this;
+
+        this.mComponentOverride = escape(clazz.getSimpleName());
         return this;
     }
 
@@ -294,16 +342,18 @@ public class SLog {
      * @param value the mapping to the key.
      * @return this object
      */
-    public final SLog withUserData(String key, String value) {
+    public final SLog withUserData(Object key, Object value) {
         if(!isEnabled) return this;
 
         if(mUserData == null) {
-            mUserData = new ArrayList<String>();
+            mUserData = new ArrayBackedList<String>(4);
         }
-        if(key == null || key.length() == 0) {
-            key = "_MISSING_KEY_" + mUserData.size() / 2;
+        String strKey = key == null ? "" : key.toString();
+
+        if(strKey.length() == 0) {
+            strKey = "_MISSING_KEY_" + mUserData.size() / 2;
         }
-        this.mUserData.add(escape(key));
+        this.mUserData.add(escape(strKey));
         this.mUserData.add(escape(value));
 
         return this;
@@ -314,24 +364,48 @@ public class SLog {
      * @param userData map of key-value pairs/
      * @return this object
      */
-    public final SLog withUserData(Map<String, String> userData) {
+    public final SLog withUserData(Map<?, ?> userData) {
         if(!isEnabled || userData == null || userData.size() == 0) {
             return this;
         }
 
-        for(Map.Entry<String, String> entry : userData.entrySet()) {
-            withUserData(entry.getKey(), entry.getValue());
+        for(Map.Entry<?, ?> entry : userData.entrySet()) {
+            withUserData(entry.getKey().toString(), entry.getValue().toString());
         }
         return this;
     }
 
+    static final Object[] EMPTY_ARRAY = {};
+    /**
+     * Escape objects in an array and convert them to String. The operation happens on
+     * the input array.
+     * @param objects
+     */
+    static Object[] escapeUserData(Object[] objects) {
+        if(objects == null || objects.length < 2) {
+            return EMPTY_ARRAY;
+        }
+        int i = 0;
+        for(; i + 1 < objects.length; i = i + 2) {
+            objects[i] = objects[i] == null ? "_MISSING_KEY_" +  i/2: escape(objects[i]);
+            objects[i+1] = escape(objects[i+1]);
+        }
+        for(; i < objects.length; ++i) {
+            objects[i] = null;
+        }
+        return objects;
+    }
+
     /**
      * Escapes a string's backward slashes (\), semicolons (;), newlines (\n) and equals(=)
-     * @param string
+     * @param object
      * @return
      */
-    static String escape(String string) {
-        if(string == null || string.length() == 0) {
+    static String escape(Object object) {
+        if(object == null) return null;
+
+        String string = object.toString();
+        if(string.length() == 0) {
             return string;
         }
 
@@ -368,48 +442,55 @@ public class SLog {
      */
     @Override
     public String toString() {
-        return build();
+        return build(mTask, mOperation, mOperationAlias, mInstrumentationOverride,
+                mComponentOverride, mMulticast, mMessageType,
+                mUserData != null ? mUserData.backingArray() : null);
     }
 
     /**
      * Build the log.
+     *
      * @return The newly built string that is ready to be logged by your preferred logger.
      */
-    public final String build() {
+    protected static String build(String task, String operation, String operationAlias,
+                              String instrOverride, String compOverride,
+                              boolean isMulticast, MessageType msgType, Object ...userData) {
         if(!isEnabled) return "";
 
         //sanitize
-        if(mTask == null || mTask.length() == 0)
-            mTask = "_MISSING_TASK_";
-        if(mOperation == null || mOperation.length() == 0)
-            mOperation = "_MISSING_OPERATION_";
+        if(task == null || task.length() == 0)
+            task = "_MISSING_TASK_";
+        if(operation == null || operation.length() == 0)
+            operation = "_MISSING_OPERATION_";
 
         //compute capacity
-        int len = 18 + mTask.length() + mOperation.length()   /* 20 => '+M=S;' = 5, '$SPG$+T=;' = 9, '+O=;' = 4  */
-                + (mOperationAlias != null ? mOperationAlias.length() + 5 : 0)
-                + (mComponentOverride != null ? mComponentOverride.length() + 5 : 0)
-                + (mInstrumentationOverride != null ? mInstrumentationOverride.length() + 5 : 0);
-        for(int i = 0; mUserData != null && i < mUserData.size(); ++i) {
-            len += mUserData.get(i) != null ? mUserData.get(i).length() + 1 : 0;
+        int len = 18 + task.length() + operation.length()   /* 20 => '+M=S;' = 5, '$SPG$+T=;' = 9, '+O=;' = 4  */
+                + (operationAlias != null ? operationAlias.length() + 5 : 0)
+                + (compOverride != null ? compOverride.length() + 5 : 0)
+                + (instrOverride != null ? instrOverride.length() + 5 : 0);
+        for(int i = 0; userData != null && i < userData.length; ++i) {
+            len += userData[i] != null ? ((String)userData[i]).length() + 1 : 0;
         }
 
         //build string
         StringBuilder builder = new StringBuilder(len);
-        builder.append(Key.TASK).append('=').append(mTask).append(';')
-                .append(Key.OPERATION).append('=').append(mOperation).append(';')
-                .append(Key.MESSAGE_TYPE).append('=').append(mMessageType).append(';');
-        if(mOperationAlias != null)
-            builder.append(Key.OPERATION_ALIAS).append('=').append(mOperationAlias).append(';');
-        if(mComponentOverride != null)
-            builder.append(Key.COMPONENT).append('=').append(mComponentOverride).append(';');
-        if(mInstrumentationOverride != null)
-            builder.append(Key.INSTRUMENTATION).append('=').append(mInstrumentationOverride).append(';');
-        if(mMulticast)
+        builder.append(Key.TASK).append('=').append(task).append(';')
+                .append(Key.OPERATION).append('=').append(operation).append(';')
+                .append(Key.MESSAGE_TYPE).append('=').append(msgType).append(';');
+        if(operationAlias != null)
+            builder.append(Key.OPERATION_ALIAS).append('=').append(operationAlias).append(';');
+        if(compOverride != null)
+            builder.append(Key.COMPONENT).append('=').append(compOverride).append(';');
+        if(instrOverride != null)
+            builder.append(Key.INSTRUMENTATION).append('=').append(instrOverride).append(';');
+        if(isMulticast)
             builder.append(Key.MULTICAST).append("=1;");
 
 
-        for(int i = 0; mUserData != null && i < mUserData.size(); i = i + 2) {
-            builder.append(mUserData.get(i)).append('=').append(mUserData.get(i+1)).append(';');
+        for(int i = 0; userData != null && i < userData.length; i = i + 2) {
+            if(userData[i] != null) {
+                builder.append(userData[i]).append('=').append(userData[i + 1]).append(';');
+            }
         }
 
         return builder.toString();
